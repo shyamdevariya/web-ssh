@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Online SSH Client Tool</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0; padding: 0; background:#222; color:#eee;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    background: #111; padding: 10px 20px; text-align: center;
+    font-size: 1.5em; font-weight: bold;
+    border-bottom: 1px solid #444;
+  }
+  main {
+    flex: 1; display: flex; flex-direction: column; padding: 10px; gap: 10px;
+  }
+  nav {
+    background: #111;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    border-bottom: 1px solid #444;
+  }
+  nav button {
+    background: #333;
+    border: none;
+    color: #eee;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 1em;
+    border-radius: 4px 4px 0 0;
+  }
+  nav button.active {
+    background: #555;
+    font-weight: bold;
+  }
+  section {
+    flex: 1;
+    display: none;
+    padding: 10px;
+    background: #000;
+    border-radius: 4px;
+    overflow: auto;
+  }
+  section.active {
+    display: block;
+  }
+  /* Keygen */
+  #keyGenResult {
+    white-space: pre-wrap;
+    background: #111;
+    padding: 10px;
+    border-radius: 4px;
+    max-height: 160px;
+    overflow: auto;
+    margin-top: 10px;
+  }
+  /* Hosts */
+  #hostsList {
+    max-height: 150px;
+    overflow-y: auto;
+    background: #111;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+  #hostsList div {
+    display: flex;
+    justify-content: space-between;
+    background: #222;
+    margin-bottom: 5px;
+    padding: 5px;
+    border-radius: 3px;
+  }
+  #hostsList div span {
+    flex: 1;
+  }
+  #hostsList div button {
+    background: #900;
+    border: none;
+    color: #eee;
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 3px;
+  }
+  label {
+    display: block;
+    margin: 6px 0 3px 0;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px;
+    background: #111;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #eee;
+    font-family: monospace;
+  }
+  button.primary {
+    margin-top: 10px;
+    background: #28a745;
+    border: none;
+    padding: 10px;
+    font-size: 1em;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button.primary:disabled {
+    background: #777;
+    cursor: not-allowed;
+  }
+  /* Terminal */
+  #terminal {
+    background: black;
+    color: white;
+    font-family: monospace;
+    height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    outline: none;
+  }
+  #terminal:focus {
+    outline: none;
+  }
+  #terminalControls {
+    margin-top: 5px;
+    display: flex;
+    gap: 10px;
+  }
+  select, button {
+    font-size: 1em;
+  }
+  footer {
+    background: #111; padding: 8px 20px; text-align: center; font-size: 0.9em; color: #888;
+    border-top: 1px solid #444;
+  }
+</style>
+</head>
+<body>
+<header>Online SSH Client Tool</header>
+<nav>
+  <button id="btnKeyGen" class="active">SSH Key Generation</button>
+  <button id="btnHosts">Host Management</button>
+  <button id="btnTerminal">Terminal Access</button>
+</nav>
+<main>
+  <section id="sectionKeyGen" class="active">
+    <button id="generateKeyBtn" class="primary">Generate SSH Key Pair (RSA 2048)</button>
+    <div id="keyGenResult" aria-live="polite"></div>
+  </section>
+  <section id="sectionHosts">
+    <div id="hostsList" aria-live="polite" aria-label="List of saved hosts"></div>
+    <form id="addHostForm">
+      <label for="hostName">Host Name (for identification)</label>
+      <input type="text" id="hostName" name="hostName" required placeholder="My Server" autocomplete="off" />
+
+      <label for="hostAddress">Host Address (IP or hostname)</label>
+      <input type="text" id="hostAddress" name="hostAddress" required placeholder="192.168.1.10" autocomplete="off" />
+
+      <label for="hostPort">SSH Port</label>
+      <input type="number" id="hostPort" name="hostPort" required value="22" min="1" max="65535" />
+
+      <label for="hostUser">Username</label>
+      <input type="text" id="hostUser" name="hostUser" required autocomplete="off" placeholder="root" />
+
+      <label for="authMethod">Authentication Method</label>
+      <select id="authMethod" name="authMethod" required aria-describedby="authDesc">
+        <option value="password">Password</option>
+        <option value="privateKey">Private Key</option>
+      </select>
+      <small id="authDesc" style="color:#888; display:block; margin-bottom:6px;">
+        Provide password or private key depending on authentication selected.
+      </small>
+
+      <label for="authPassword" id="labelPassword">Password</label>
+      <input type="password" id="authPassword" name="authPassword" autocomplete="new-password" />
+
+      <label for="authPrivateKey" id="labelPrivateKey" style="display:none;">Private Key</label>
+      <textarea id="authPrivateKey" name="authPrivateKey" rows="6" style="display:none; font-family: monospace;"></textarea>
+
+      <button type="submit" class="primary">Add Host</button>
+    </form>
+  </section>
+  <section id="sectionTerminal">
+    <label for="selectHost">Select Host to Connect</label>
+    <select id="selectHost" aria-required="true">
+      <option value="">-- Select a Host --</option>
+    </select>
+    <div id="terminal" tabindex="0" aria-label="SSH Terminal"></div>
+    <div id="terminalControls">
+      <button id="connectBtn" class="primary" disabled>Connect</button>
+      <button id="disconnectBtn" disabled>Disconnect</button>
+      <span id="terminalStatus" style="color:#ccc; align-self:center;"></span>
+    </div>
+  </section>
+</main>
+<footer>
+  &copy; 2024 Online SSH Client Tool. Caution: Use only on trusted networks.
+</footer>
+<script>
+  const apiBaseUrl = 'http://localhost:3000/api';
+
+  // Tab switching
+  const btnKeyGen = document.getElementById('btnKeyGen');
+  const btnHosts = document.getElementById('btnHosts');
+  const btnTerminal = document.getElementById('btnTerminal');
+  const sectionKeyGen = document.getElementById('sectionKeyGen');
+  const sectionHosts = document.getElementById('sectionHosts');
+  const sectionTerminal = document.getElementById('sectionTerminal');
+
+  function switchTab(tab) {
+    btnKeyGen.classList.remove('active');
+    btnHosts.classList.remove('active');
+    btnTerminal.classList.remove('active');
+    sectionKeyGen.classList.remove('active');
+    sectionHosts.classList.remove('active');
+    sectionTerminal.classList.remove('active');
+
+    if (tab === 'keygen') {
+      btnKeyGen.classList.add('active');
+      sectionKeyGen.classList.add('active');
+    } else if (tab === 'hosts') {
+      btnHosts.classList.add('active');
+      sectionHosts.classList.add('active');
+      loadHosts();
+    } else if (tab === 'terminal') {
+      btnTerminal.classList.add('active');
+      sectionTerminal.classList.add('active');
+      loadHostsToSelect();
+    }
+  }
+
+  btnKeyGen.addEventListener('click', () => switchTab('keygen'));
+  btnHosts.addEventListener('click', () => switchTab('hosts'));
+  btnTerminal.addEventListener('click', () => switchTab('terminal'));
+
+  // Key generation
+  const generateKeyBtn = document.getElementById('generateKeyBtn');
+  const keyGenResult = document.getElementById('keyGenResult');
+
+  generateKeyBtn.addEventListener('click', async () => {
+    generateKeyBtn.disabled = true;
+    keyGenResult.textContent = 'Generating keys...';
+    try {
+      const resp = await fetch(apiBaseUrl + '/generate-key', { method: 'POST' });
+      if (!resp.ok) throw new Error('Failed to generate keys');
+      const data = await resp.json();
+      keyGenResult.textContent = `Public Key:\n${data.publicKey}\n\nPrivate Key:\n${data.privateKey}`;
+    } catch (err) {
+      keyGenResult.textContent = 'Error generating keys: ' + err.message;
+    } finally {
+      generateKeyBtn.disabled = false;
+    }
+  });
+
+  // Host management
+  const hostsList = document.getElementById('hostsList');
+  const addHostForm = document.getElementById('addHostForm');
+  const authMethodSelect = document.getElementById('authMethod');
+  const authPasswordInput = document.getElementById('authPassword');
+  const authPrivateKeyInput = document.getElementById('authPrivateKey');
+  const labelPassword = document.getElementById('labelPassword');
+  const labelPrivateKey = document.getElementById('labelPrivateKey');
+
+  // Toggle auth inputs
+  authMethodSelect.addEventListener('change', () => {
+    if (authMethodSelect.value === 'password') {
+      authPasswordInput.style.display = '';
+      labelPassword.style.display = '';
+      authPasswordInput.required = true;
+
+      authPrivateKeyInput.style.display = 'none';
+      labelPrivateKey.style.display = 'none';
+      authPrivateKeyInput.required = false;
+    } else {
+      authPasswordInput.style.display = 'none';
+      labelPassword.style.display = 'none';
+      authPasswordInput.required = false;
+
+      authPrivateKeyInput.style.display = '';
+      labelPrivateKey.style.display = '';
+      authPrivateKeyInput.required = true;
+    }
+  });
+
+  addHostForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('hostName').value.trim();
+    const host = document.getElementById('hostAddress').value.trim();
+    const port = document.getElementById('hostPort').value.trim();
+    const username = document.getElementById('hostUser').value.trim();
+    const authMethod = authMethodSelect.value;
+    const password = authPasswordInput.value;
+    const privateKey = authPrivateKeyInput.value;
+
+    if (!name || !host || !port || !username) {
+      alert('Please fill all required fields.');
+      return;
+    }
+
+    let body = { name, host, port, username, authMethod};
+    if (authMethod === 'password') {
+      if (!password) {
+        alert('Password is required.');
+        return;
+      }
+      body.password = password;
+    } else {
+      if (!privateKey) {
+        alert('Private Key is required.');
+        return;
+      }
+      body.privateKey = privateKey;
+    }
+
+    try {
+      const resp = await fetch(apiBaseUrl + '/hosts', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) {
+        const err = await resp.json();
+        alert('Error adding host: ' + err.error);
+        return;
+      }
+      alert('Host added successfully!');
+      addHostForm.reset();
+      authMethodSelect.dispatchEvent(new Event('change'));
+      loadHosts();
+      loadHostsToSelect();
+    } catch (err) {
+      alert('Failed to add host: ' + err.message);
+    }
+  });
+
+  async function loadHosts() {
+    hostsList.textContent = 'Loading hosts...';
+    try {
+      const resp = await fetch(apiBaseUrl + '/hosts');
+      if (!resp.ok) throw new Error('Failed to fetch hosts');
+      const hosts = await resp.json();
+      if (hosts.length === 0) {
+        hostsList.textContent = 'No hosts added yet.';
+        return;
+      }
+      hostsList.innerHTML = '';
+      hosts.forEach(h => {
+        const div = document.createElement('div');
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = h.name + ' (' + h.host + ':' + h.port + ')';
+        div.appendChild(nameSpan);
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', () => deleteHost(h.id));
+        div.appendChild(delBtn);
+        hostsList.appendChild(div);
+      });
+    } catch (err) {
+      hostsList.textContent = 'Error loading hosts: ' + err.message;
+    }
+  }
+
+  async function deleteHost(id) {
+    if (!confirm('Are you sure you want to delete this host?')) return;
+    try {
+      const resp = await fetch(apiBaseUrl + '/hosts/' + id, { method: 'DELETE' });
+      if (!resp.ok) {
+        const err = await resp.json();
+        alert('Error deleting host: ' + err.error);
+        return;
+      }
+      alert('Host deleted');
+      loadHosts();
+      loadHostsToSelect();
+    } catch (err) {
+      alert('Failed to delete host: ' + err.message);
+    }
+  }
+
+  // Terminal Access
+  const selectHost = document.getElementById('selectHost');
+  const connectBtn = document.getElementById('connectBtn');
+  const disconnectBtn = document.getElementById('disconnectBtn');
+  const terminal = document.getElementById('terminal');
+  const terminalStatus = document.getElementById('terminalStatus');
+
+  let ws = null;
+
+  async function loadHostsToSelect() {
+    selectHost.innerHTML = '<option value="">-- Select a Host --</option>';
+    try {
+      const resp = await fetch(apiBaseUrl + '/hosts');
+      if (!resp.ok) throw new Error('Failed to fetch hosts');
+      const hosts = await resp.json();
+      hosts.forEach(h => {
+        const option = document.createElement('option');
+        option.value = h.id;
+        option.textContent = h.name + ' (' + h.host + ':' + h.port + ')';
+        selectHost.appendChild(option);
+      });
+    } catch (err) {
+      selectHost.innerHTML = '<option value="">Error loading hosts</option>';
+    }
+    connectBtn.disabled = selectHost.value === '';
+  }
+
+  selectHost.addEventListener('change', () => {
+    connectBtn.disabled = selectHost.value === '';
+  });
+
+  connectBtn.addEventListener('click', async () => {
+    if (ws !== null) {
+      alert('Already connected');
+      return;
+    }
+    const hostId = parseInt(selectHost.value);
+    if (!hostId) {
+      alert('Please select a host');
+      return;
+    }
+    terminal.textContent = '';
+    terminalStatus.textContent = 'Connecting...';
+    connectBtn.disabled = true;
+
+    // Get host details including auth info (password or private key) is not sent in listing by backend for security reasons
+    // So we prompt user to input password or private key at terminal tab before connecting
+    // Or to simplify the flow, we can add a prompt modal or a password/privateKey input at terminal tab on connect
+    // For simplicity here we'll prompt user
+
+    let hostDetails;
+    try {
+      const resp = await fetch(apiBaseUrl + '/hosts');
+      if (!resp.ok) throw new Error('Failed to fetch hosts');
+      const hosts = await resp.json();
+      hostDetails = hosts.find(h => h.id === hostId);
+      if (!hostDetails) throw new Error('Host not found');
+    } catch (err) {
+      alert('Error fetching host details: ' + err.message);
+      connectBtn.disabled = false;
+      terminalStatus.textContent = '';
+      return;
+    }
+
+    let authMethod = hostDetails.authMethod;
+    let password = null;
+    let privateKey = null;
+
+    if (authMethod === 'password') {
+      password = prompt('Enter password for user ' + hostDetails.username + ' on host ' + hostDetails.host);
+      if (!password) {
+        alert('Password is required.');
+        connectBtn.disabled = false;
+        terminalStatus.textContent = '';
+        return;
+      }
+    } else if (authMethod === 'privateKey') {
+      privateKey = prompt('Paste private key for user ' + hostDetails.username + ' on host ' + hostDetails.host);
+      if (!privateKey) {
+        alert('Private key is required.');
+        connectBtn.disabled = false;
+        terminalStatus.textContent = '';
+        return;
+      }
+    } else {
+      alert('Unsupported authentication method');
+      connectBtn.disabled = false;
+      terminalStatus.textContent = '';
+      return;
+    }
+
+    // Start WebSocket connection
+    ws = new WebSocket('ws://localhost:3000/ws/terminal');
+
+    ws.onopen = () => {
+      terminalStatus.textContent = 'SSH connecting...';
+      // Send start-ssh command with host details + auth
+      ws.send(JSON.stringify({
+        type: 'start-ssh',
+        host: hostDetails.host,
+        port: hostDetails.port,
+        username: hostDetails.username,
+        authMethod,
+        password,
+        privateKey
+      }));
+      connectBtn.disabled = true;
+      disconnectBtn.disabled = false;
+      terminal.focus();
+    };
+
+    ws.onerror = (e) => {
+      terminalStatus.textContent = 'WebSocket error: ' + e.message;
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+      ws = null;
+    };
+
+    ws.onclose = () => {
+      terminalStatus.textContent = 'Disconnected';
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+      ws = null;
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'data') {
+          terminal.textContent += msg.data;
+          terminal.scrollTop = terminal.scrollHeight;
+        } else if (msg.type === 'status') {
+          terminalStatus.textContent = msg.status;
+        } else if (msg.type === 'error') {
+          terminalStatus.textContent = 'Error: ' + msg.message;
+        }
+      } catch (err) {
+        // Ignore parse errors
+      }
+    };
+  });
+
+  disconnectBtn.addEventListener('click', () => {
+    if (ws) {
+      ws.close();
+      ws = null;
+      terminalStatus.textContent = 'Disconnected';
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+    }
+  });
+
+  // Terminal input handling
+  terminal.addEventListener('keydown', (e) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // We only send what user typed
+    // For special keys like Enter, Backspace, etc. we send corresponding characters
+    let sendData = null;
+    if (e.key.length === 1) {
+      sendData = e.key;
+    } else if (e.key === 'Enter') {
+      sendData = '\r';
+    } else if (e.key === 'Backspace') {
+      sendData = '\x7f';
+    } else if (e.key === 'Tab') {
+      sendData = '\t';
+    }
+    if (sendData !== null) {
+      ws.send(sendData);
+      e.preventDefault();
+    }
+  });
+
+  // Initialize
+  switchTab('keygen');
+</script>
+</body>
+</html>
